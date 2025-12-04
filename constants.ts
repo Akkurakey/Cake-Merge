@@ -26,7 +26,7 @@ export const DESSERT_TYPES: ItemType[] = [
 export const PHYSICS = {
   GRAVITY_Y: -0.25, // Negative gravity makes items gently drift towards the top (tilted table)
   SHOOT_SPEED: 12, // Lowered initial shoot speed as requested
-  WALL_THICKNESS: 200, // Thicker walls to prevent tunneling
+  WALL_THICKNESS: 1000, // Greatly increased thickness to prevent tunneling
   TOP_BOUNDARY_OFFSET: 40, // Height of the visual top border overlay
   FRICTION: 0.1, // Surface friction on collision
   FRICTION_AIR: 0.02, // Lower drag for smoother sliding that eventually stops
