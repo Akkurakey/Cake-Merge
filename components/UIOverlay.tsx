@@ -1,5 +1,5 @@
 import React from 'react';
-import { ItemType } from '../constants';
+import { ItemType, PHYSICS } from '../constants';
 import { Volume2, VolumeX, RefreshCw, Trophy } from 'lucide-react';
 
 interface UIOverlayProps {
@@ -46,39 +46,40 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
   return (
     <>
-      {/* HUD Container - Moved to BOTTOM to avoid covering the top pile */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 pb-6 flex justify-between items-end pointer-events-none z-10 font-['Fredoka']">
+      {/* HUD Container - Moved back to BOTTOM, split to corners */}
+      {/* Using justify-between to keep center clear for the ball */}
+      <div 
+        className="absolute left-0 right-0 bottom-0 p-3 px-4 flex justify-between items-end pointer-events-none z-10 font-['Fredoka'] pb-4"
+      >
         
-        {/* Left: Settings */}
-        <div className="flex flex-col gap-2 pointer-events-auto mb-4">
-             <button
-                onClick={onToggleMute}
-                className="w-10 h-10 flex items-center justify-center bg-[#fff8e7] rounded-full border-2 border-amber-200 shadow-md text-amber-800 hover:bg-white transition-colors"
-            >
-                {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
+        {/* Left Side: Mute & Score */}
+        <div className="flex flex-col gap-2 items-start pointer-events-auto">
+             <div className="flex items-center gap-2">
+                <button
+                    onClick={onToggleMute}
+                    className="w-10 h-10 flex items-center justify-center bg-[#fff8e7] rounded-full border-2 border-amber-200 shadow-sm text-amber-800 hover:bg-white transition-colors"
+                >
+                    {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                </button>
+             </div>
+             
+             {/* Score Pill */}
+             <div className="bg-[#fff8e7] border-2 border-[#d97706] rounded-full px-1 py-1 pr-4 shadow-md flex items-center gap-2 min-w-[120px] mt-1">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-b from-yellow-300 to-yellow-500 border border-yellow-600 flex items-center justify-center shadow-inner">
+                     <span className="text-yellow-800 font-bold text-lg">$</span>
+                </div>
+                <span className="text-xl font-black text-[#92400e] tracking-wide flex-1 text-center">{score}</span>
+             </div>
         </div>
        
-        {/* Center: Score (Pill Shape) */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-8">
-           <div className="bg-[#fff8e7] border-2 border-[#d97706] rounded-full px-1 py-1 pr-5 shadow-lg flex items-center gap-2 min-w-[140px]">
-            {/* Coin Icon */}
-            <div className="w-8 h-8 rounded-full bg-gradient-to-b from-yellow-300 to-yellow-500 border border-yellow-600 flex items-center justify-center shadow-inner">
-                 <span className="text-yellow-800 font-bold text-lg">$</span>
-            </div>
-            {/* Score Text */}
-            <span className="text-2xl font-black text-[#92400e] tracking-wide flex-1 text-center">{score}</span>
-           </div>
-        </div>
-
-        {/* Right: Next Item Bubble */}
-        <div className="flex flex-col items-center pointer-events-none mb-4">
+        {/* Right Side: Next Item Bubble */}
+        <div className="flex flex-col items-center pointer-events-none">
              <div className="relative">
-                <div className="w-16 h-16 bg-[#fff8e7] rounded-full border-4 border-amber-100 shadow-xl flex items-center justify-center overflow-hidden">
+                <div className="w-14 h-14 bg-[#fff8e7] rounded-full border-4 border-amber-100 shadow-lg flex items-center justify-center overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1/2 bg-white/30 rounded-t-full"></div>
-                    <span className="text-3xl filter drop-shadow-md">{nextItem.icon}</span>
+                    <span className="text-2xl filter drop-shadow-md">{nextItem.icon}</span>
                 </div>
-                <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-700 text-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-900 shadow-sm">
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-amber-700 text-amber-100 text-[9px] font-bold px-2 py-0.5 rounded-full border border-amber-900 shadow-sm whitespace-nowrap">
                     NEXT
                 </div>
              </div>
