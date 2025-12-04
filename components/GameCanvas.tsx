@@ -90,15 +90,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Collision Logic
     Matter.Events.on(engine, 'collisionStart', (event) => {
       const pairs = event.pairs;
+      // Track bodies processed in this tick to prevent double-merging logic on the same body
+      const processedBodies = new Set<number>();
       
       for (const pair of pairs) {
         const bodyA = pair.bodyA;
         const bodyB = pair.bodyB;
 
+        // Skip if either body was already merged/removed in this frame
+        if (processedBodies.has(bodyA.id) || processedBodies.has(bodyB.id)) {
+            continue;
+        }
+
         if (bodyA.label === bodyB.label && bodyA.label.startsWith('item_') && bodyA.id < bodyB.id) {
             const typeId = parseInt(bodyA.label.split('_')[1]);
             
             if (typeId < DESSERT_TYPES.length - 1) {
+                // Mark as processed immediately
+                processedBodies.add(bodyA.id);
+                processedBodies.add(bodyB.id);
+
                 const newTypeId = typeId + 1;
                 const newType = DESSERT_TYPES[newTypeId];
                 
