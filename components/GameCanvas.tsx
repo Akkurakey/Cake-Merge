@@ -270,7 +270,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.clearRect(0, 0, width, height); // Clear canvas
     
     // Lowered limit line to be more forgiving (was 160)
-    const limitY = height - 143; 
+    const limitY = height - 140; 
     const isDangerActive = dangerStartTimeRef.current !== null;
     drawTableBackground(ctx, width, height, limitY, isDangerActive);
 
@@ -464,15 +464,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     Matter.World.add(engine.world, body);
 
     // Calculate speed based on screen width AND drag power
-    let baseSpeed = PHYSICS.SHOOT_SPEED;
-    if (width > 500) {
-        baseSpeed *= 1.2;
-    }
-
+    // Removed the width multiplier as it made iPad shots too strong
+    const baseSpeed = PHYSICS.SHOOT_SPEED;
+    
     // Power mapping:
-    // Min power (close to ball) -> 0.6x speed
+    // Adjusted range to allow softer shots
+    // Min power (close to ball) -> 0.5x speed
     // Max power (far from ball) -> 1.5x speed
-    const powerMultiplier = 0.6 + (aimPowerRef.current * 0.9);
+    const powerMultiplier = 0.5 + (aimPowerRef.current * 1.0);
     
     const finalSpeed = baseSpeed * powerMultiplier;
 
