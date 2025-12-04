@@ -270,7 +270,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.clearRect(0, 0, width, height); // Clear canvas
     
     // Lowered limit line to be more forgiving (was 160)
-    const limitY = height - 140; 
+    const limitY = height - 150; 
     const isDangerActive = dangerStartTimeRef.current !== null;
     drawTableBackground(ctx, width, height, limitY, isDangerActive);
 
