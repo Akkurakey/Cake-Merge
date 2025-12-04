@@ -42,6 +42,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const aimPowerRef = useRef<number>(0.5); // 0.0 to 1.0
   const canShootRef = useRef<boolean>(true);
   
+  // Game Over Timer Ref
+  const dangerStartTimeRef = useRef<number | null>(null);
+  
   const getRandomSmallItemId = () => Math.floor(Math.random() * 3);
 
   // --- Initialization ---
@@ -49,11 +52,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (!containerRef.current || !canvasRef.current) return;
 
     // Use physics settings from constants (now with negative gravity for tilt)
+    // Increase iterations for better collision stability
     const engine = Matter.Engine.create({
       enableSleeping: true,
       gravity: { x: 0, y: PHYSICS.GRAVITY_Y }, 
-      positionIterations: 8, // Increase precision for collisions
-      velocityIterations: 8,
+      positionIterations: 10, 
+      velocityIterations: 10,
     });
     engineRef.current = engine;
 
@@ -72,18 +76,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
     };
 
-    // Top Wall
-    const topWallY = PHYSICS.TOP_BOUNDARY_OFFSET - (PHYSICS.WALL_THICKNESS / 2);
-    const topWall = Matter.Bodies.rectangle(width / 2, topWallY, width, PHYSICS.WALL_THICKNESS, { 
+    // Make walls extra wide/thick to prevent tunneling and handle resize gaps
+    const wallThickness = PHYSICS.WALL_THICKNESS;
+    const extraWidth = 1000; 
+
+    // Top Wall - Positioned so its bottom edge is at TOP_BOUNDARY_OFFSET
+    const topWallY = PHYSICS.TOP_BOUNDARY_OFFSET - (wallThickness / 2);
+    const topWall = Matter.Bodies.rectangle(width / 2, topWallY, width + extraWidth, wallThickness, { 
         ...wallOptions, 
         label: 'top_wall' 
     });
     
-    // Bottom Wall
-    const bottomWall = Matter.Bodies.rectangle(width / 2, height + PHYSICS.WALL_THICKNESS / 2 + 100, width, PHYSICS.WALL_THICKNESS, wallOptions);
+    // Bottom Wall (Limit)
+    const bottomWall = Matter.Bodies.rectangle(width / 2, height + wallThickness / 2 + 100, width + extraWidth, wallThickness, wallOptions);
 
-    const leftWall = Matter.Bodies.rectangle(0 - PHYSICS.WALL_THICKNESS / 2, height / 2, PHYSICS.WALL_THICKNESS, height * 3, wallOptions);
-    const rightWall = Matter.Bodies.rectangle(width + PHYSICS.WALL_THICKNESS / 2, height / 2, PHYSICS.WALL_THICKNESS, height * 3, wallOptions);
+    // Side Walls
+    const leftWall = Matter.Bodies.rectangle(0 - wallThickness / 2, height / 2, wallThickness, height * 4, wallOptions);
+    const rightWall = Matter.Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 4, wallOptions);
 
     Matter.World.add(engine.world, [topWall, bottomWall, leftWall, rightWall]);
 
@@ -149,6 +158,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     nextItemIdRef.current = getRandomSmallItemId();
     onNextItemChange(DESSERT_TYPES[nextItemIdRef.current]);
+    dangerStartTimeRef.current = null;
 
     return () => {
         Matter.Engine.clear(engine);
@@ -179,20 +189,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     });
   };
 
-  const drawTableBackground = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const limitY = height - 160; 
-    
+  const drawTableBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, limitY: number, isDanger: boolean) => {
     ctx.beginPath();
     ctx.moveTo(20, limitY);
     ctx.lineTo(width - 20, limitY);
     ctx.setLineDash([15, 15]);
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; 
-    ctx.lineWidth = 3;
+    
+    // Flash red if in danger
+    if (isDanger && Date.now() % 500 < 250) {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 1.0)';
+        ctx.lineWidth = 4;
+    } else {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; 
+        ctx.lineWidth = 3;
+    }
+    
     ctx.stroke();
     ctx.setLineDash([]);
     
     ctx.font = 'bold 12px Arial';
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.fillStyle = isDanger ? 'rgba(239, 68, 68, 1.0)' : 'rgba(239, 68, 68, 0.4)';
     ctx.textAlign = 'right';
     ctx.fillText('FULL LINE', width - 25, limitY - 8);
   };
@@ -252,15 +268,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     Matter.Engine.update(engine, 1000 / 60);
 
     ctx.clearRect(0, 0, width, height); // Clear canvas
-    drawTableBackground(ctx, width, height);
+    
+    // Lowered limit line to be more forgiving (was 160)
+    const limitY = height - 140; 
+    const isDangerActive = dangerStartTimeRef.current !== null;
+    drawTableBackground(ctx, width, height, limitY, isDangerActive);
 
     // Render Bodies
     const bodies = Matter.Composite.allBodies(engine.world);
-    const limitY = height - 160; // Must match drawing
     const now = Date.now();
+    let currentFrameDanger = false;
+    
+    // Hard boundary for safety (prevent tunneling)
+    const safeTopLimit = PHYSICS.TOP_BOUNDARY_OFFSET + 5;
 
     bodies.forEach(body => {
       if (body.label.startsWith('item_')) {
+        // --- Safety Check: Manual Position Clamping ---
+        // If physics failed and ball passed the wall, force it back.
+        if (body.position.y < safeTopLimit) {
+            Matter.Body.setPosition(body, { x: body.position.x, y: safeTopLimit });
+            if (body.velocity.y < 0) {
+                Matter.Body.setVelocity(body, { x: body.velocity.x, y: Math.abs(body.velocity.y) * 0.5 });
+            }
+        }
+        
         const typeId = parseInt(body.label.split('_')[1]);
         const type = DESSERT_TYPES[typeId];
         const { x, y } = body.position;
@@ -287,15 +319,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         ctx.restore();
 
-        // Check for Game Over 
+        // Check for Danger Condition (Ball below line and slow)
         if (!isGameOver && gameStarted && canShootRef.current) { 
-             // speed < 0.1 means stopped.
-             if (y > limitY && body.speed < 0.1) {
-                onGameOver();
+             // speed < 0.2 allows for slight movement (settling)
+             if (y > limitY && body.speed < 0.2) {
+                currentFrameDanger = true;
              }
         }
       }
     });
+
+    // Handle Game Over Timer
+    if (currentFrameDanger) {
+        if (!dangerStartTimeRef.current) {
+            dangerStartTimeRef.current = Date.now();
+        } else if (Date.now() - dangerStartTimeRef.current > 2000) {
+            // Must be in danger for 2 continuous seconds to fail
+            onGameOver();
+        }
+    } else {
+        dangerStartTimeRef.current = null;
+    }
 
     // Render Launcher / Aim Line
     if (!isGameOver && gameStarted) {
