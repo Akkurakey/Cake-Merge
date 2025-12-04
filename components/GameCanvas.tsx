@@ -39,6 +39,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const nextItemIdRef = useRef<number>(0);
   const isAimingRef = useRef<boolean>(false);
   const aimAngleRef = useRef<number>(-Math.PI / 2);
+  const aimPowerRef = useRef<number>(0.5); // 0.0 to 1.0
   const canShootRef = useRef<boolean>(true);
   
   const getRandomSmallItemId = () => Math.floor(Math.random() * 3);
@@ -186,35 +187,35 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   const drawItemVisual = (ctx: CanvasRenderingContext2D, type: ItemType) => {
-     // 1. Outer Glass Shell (Transparent)
+     // 1. Outer Glass Shell (Transparent) - Thinner rim
     ctx.beginPath();
     ctx.arc(0, 0, type.radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Glass body
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; // More transparent body
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Glass rim
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // Glass rim
     ctx.stroke();
 
-    // 2. Inner Liquid/Color (Slightly smaller)
+    // 2. Inner Liquid/Color (Much fuller now: 0.95 instead of 0.85)
     ctx.beginPath();
-    ctx.arc(0, 0, type.radius * 0.85, 0, Math.PI * 2);
-    ctx.fillStyle = type.color; // The main color from config
+    ctx.arc(0, 0, type.radius * 0.95, 0, Math.PI * 2);
+    ctx.fillStyle = type.color; 
     ctx.fill();
     
-    // 3. Center Detail / Float (Secondary color)
+    // 3. Center Detail / Float (Secondary color) - Larger too
     ctx.beginPath();
-    ctx.arc(0, 0, type.radius * 0.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, type.radius * 0.6, 0, Math.PI * 2);
     ctx.fillStyle = type.colorCenter; 
     ctx.fill();
     
-    // 4. Glossy Highlight
+    // 4. Glossy Highlight - Sharper
     ctx.beginPath();
-    ctx.arc(-type.radius * 0.3, -type.radius * 0.3, type.radius * 0.2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.arc(-type.radius * 0.35, -type.radius * 0.35, type.radius * 0.25, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.fill();
 
-    // 5. Icon
-    ctx.font = `${type.radius}px serif`;
+    // 5. Icon - Slightly Larger
+    ctx.font = `${type.radius * 1.1}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000';
@@ -292,23 +293,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         
         // Aim Line
         if (isAimingRef.current) {
-            const lineLen = 300;
-            const lx = cx + Math.cos(aimAngleRef.current) * lineLen;
-            const ly = cy + Math.sin(aimAngleRef.current) * lineLen;
+            // Visual Length based on Power
+            const minLen = 50;
+            const maxLen = 350;
+            const currentLen = minLen + (maxLen - minLen) * aimPowerRef.current;
+
+            const lx = cx + Math.cos(aimAngleRef.current) * currentLen;
+            const ly = cy + Math.sin(aimAngleRef.current) * currentLen;
 
             ctx.beginPath();
             ctx.moveTo(cx, cy);
             ctx.lineTo(lx, ly);
-            ctx.setLineDash([8, 8]);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.lineWidth = 3;
+            
+            // Dashed line changes with power, but COLOR IS WHITE AGAIN
+            ctx.setLineDash([8 + (aimPowerRef.current * 10), 8]);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + aimPowerRef.current * 0.3})`; // White, opacity varies
+            ctx.lineWidth = 3 + (aimPowerRef.current * 2); // Gets thicker
             ctx.stroke();
             ctx.setLineDash([]);
             
             // Draw Target Dot
             ctx.beginPath();
-            ctx.arc(lx, ly, 6, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.arc(lx, ly, 6 + aimPowerRef.current * 4, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(255, 255, 255, 0.9)`;
             ctx.fill();
         }
 
@@ -351,7 +358,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    let angle = Math.atan2(clientY - cy, clientX - cx);
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+
+    // 1. Calculate Angle
+    let angle = Math.atan2(dy, dx);
     
     // Constrain aiming to upward cone
     // -PI is left, -PI/2 is up, 0 is right.
@@ -359,11 +370,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const maxAngle = -0.1;
     
     if (angle > 0) angle = Math.max(-Math.PI/2, angle - Math.PI*2); 
-    
     if (angle < minAngle) angle = minAngle;
     if (angle > maxAngle) angle = maxAngle;
 
     aimAngleRef.current = angle;
+
+    // 2. Calculate Power based on Distance
+    // Distance from launcher center
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const maxDist = 300; // Max drag distance for full power
+    
+    // Normalize power between 0 and 1
+    // You have to drag at least 50px to start increasing power
+    let power = Math.min(dist, maxDist) / maxDist;
+    // Curve the power so it feels responsive (linear is fine too)
+    aimPowerRef.current = power;
   };
 
   const handlePointerUp = () => {
@@ -387,15 +408,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     
     Matter.World.add(engine.world, body);
 
-    // Calculate speed based on screen width
-    // If width > 500 (typical tablet/desktop break), add 20% more force
-    let shootSpeed = PHYSICS.SHOOT_SPEED;
+    // Calculate speed based on screen width AND drag power
+    let baseSpeed = PHYSICS.SHOOT_SPEED;
     if (width > 500) {
-        shootSpeed *= 1.2;
+        baseSpeed *= 1.2;
     }
 
-    const velocityX = Math.cos(aimAngleRef.current) * shootSpeed;
-    const velocityY = Math.sin(aimAngleRef.current) * shootSpeed;
+    // Power mapping:
+    // Min power (close to ball) -> 0.6x speed
+    // Max power (far from ball) -> 1.5x speed
+    const powerMultiplier = 0.6 + (aimPowerRef.current * 0.9);
+    
+    const finalSpeed = baseSpeed * powerMultiplier;
+
+    const velocityX = Math.cos(aimAngleRef.current) * finalSpeed;
+    const velocityY = Math.sin(aimAngleRef.current) * finalSpeed;
 
     Matter.Body.setVelocity(body, { x: velocityX, y: velocityY });
 
